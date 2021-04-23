@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>ReGNC Cesium Viewer</title>
+    <meta charset="utf-8">
+    <!-- Include the CesiumJS JavaScript and CSS files -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.80/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.80/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: black;
+        }
+
+        #cesiumContainer {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+        }
+
+        #toolbar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            z-index: 100;
+            font-family: monospace;
+            padding: 5px;
+        }
+    </style>
+</head>
+    <body>
+    <div id="toolbar"></div>
+    <div id="cesiumContainer"></div>
+    <script>
+        var stage1 = 0;
+        // Your access token can be found at: https://cesium.com/ion/tokens.
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkMTdlZjYwZC00ODEzLTQ2MTMtOTFlMC01YTkwMjgyNmQwNTkiLCJpZCI6NDMxNDQsImlhdCI6MTYxMjI1ODA2NH0.r1ZlRceXFNnquaiXzkud4-KysEhQ7cHAUtqcKhAlUwQ';
+        // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+        const viewer = new Cesium.Viewer('cesiumContainer');
+        const toolbar = document.getElementById("toolbar");
+
+
+        fetch('traj.czml')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("HTTP error " + response.status);
+                }
+                return response.json();
+            })
+            .then(json => {
+                viewer.dataSources.add(
+                    Cesium.CzmlDataSource.load(json)
+                ).then(function(dataSource) {
+                    stage1 = dataSource.entities.getById('F9/S1');
+
+                    viewer.trackedEntity = stage1;
+                    var scratchCartesian = new Cesium.Cartesian3();
+                    var scratchCartographic = new Cesium.Cartographic();
+                    viewer.clock.onTick.addEventListener(function(clock) {
+
+                        // Get the position of our entity at the current time, if possible (otherwise undefined).
+                        var pos = stage1.position.getValue(clock.currentTime, scratchCartesian);
+                        var rot = stage1.properties.rotation.getValue(clock.currentTime);
+                        var vel = stage1.properties.velocity.getValue(clock.currentTime);
+                        var abv = stage1.properties.abv.getValue(clock.currentTime);
+                        var q = stage1.properties.q.getValue(clock.currentTime);
+                        var mach = stage1.properties.mach.getValue(clock.currentTime);
+                        var gmod = Math.round(stage1.properties.guidancemode.getValue(clock.currentTime));
+
+                        if (pos) {
+                            // If position is valid, convert from Cartesian3 to Cartographic.
+                            var lla = Cesium.Cartographic.fromCartesian(pos, Cesium.Ellipsoid.WGS84, scratchCartographic);
+
+                            toolbar.innerHTML = `
+                                <b>ReGNC-Cesium</b><br>
+                                LLA: ${Cesium.Math.toDegrees(lla.latitude).toFixed(4)} ${Cesium.Math.toDegrees(lla.longitude).toFixed(4)} ${lla.height.toFixed(3)}<br>
+                                RPY: ${rot.x.toFixed(3)} ${rot.y.toFixed(3)} ${rot.z.toFixed(3)}<br>
+                                Vbody: ${vel.x.toFixed(3)} ${vel.y.toFixed(3)} ${vel.z.toFixed(3)}<br>
+                                Alpha: ${abv.x.toFixed(3)} Beta: ${(abv.y ? abv.y : 0).toFixed(3)}<br>
+                                Airspeed: ${abv.z.toFixed(3)} Mach: ${mach.toFixed(3)}<br>
+                                q: ${q.toFixed(3)}<br><br>
+                                GNC State: ${gmod}
+                            `;
+                        }
+                      });
+                });
+
+                viewer.extend(Cesium.viewerCesiumInspectorMixin);
+            })
+
+    </script>
+    </div>
+    </body>
+</html>
